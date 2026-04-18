@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/haiwen/seafile-server/fileserver/option"
-	"github.com/haiwen/seafile-server/fileserver/repomgr"
+	"github.com/justjanne/seafile-fileserver/option"
+	"github.com/justjanne/seafile-fileserver/repomgr"
 )
 
 // InfiniteQuota indicates that the quota is unlimited.

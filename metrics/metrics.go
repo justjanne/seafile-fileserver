@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/go-redis/redis/v8"
-	"github.com/haiwen/seafile-server/fileserver/option"
+	redis "github.com/go-redis/redis/v8"
+	"github.com/justjanne/seafile-fileserver/option"
 
 	log "github.com/sirupsen/logrus"
 )

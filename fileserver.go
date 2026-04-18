@@ -2,8 +2,6 @@
 package main
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -15,19 +13,18 @@ import (
 	"runtime/debug"
 	"strings"
 	"syscall"
-	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
-	"github.com/haiwen/seafile-server/fileserver/blockmgr"
-	"github.com/haiwen/seafile-server/fileserver/commitmgr"
-	"github.com/haiwen/seafile-server/fileserver/fsmgr"
-	"github.com/haiwen/seafile-server/fileserver/metrics"
-	"github.com/haiwen/seafile-server/fileserver/option"
-	"github.com/haiwen/seafile-server/fileserver/repomgr"
-	"github.com/haiwen/seafile-server/fileserver/searpc"
-	"github.com/haiwen/seafile-server/fileserver/share"
-	"github.com/haiwen/seafile-server/fileserver/utils"
+	"github.com/justjanne/seafile-fileserver/blockmgr"
+	"github.com/justjanne/seafile-fileserver/commitmgr"
+	"github.com/justjanne/seafile-fileserver/db"
+	"github.com/justjanne/seafile-fileserver/fsmgr"
+	"github.com/justjanne/seafile-fileserver/metrics"
+	"github.com/justjanne/seafile-fileserver/option"
+	"github.com/justjanne/seafile-fileserver/repomgr"
+	"github.com/justjanne/seafile-fileserver/searpc"
+	"github.com/justjanne/seafile-fileserver/share"
+	"github.com/justjanne/seafile-fileserver/utils"
 	log "github.com/sirupsen/logrus"
 
 	"net/http/pprof"
@@ -88,78 +85,6 @@ func (f *LogFormatter) Format(entry *log.Entry) ([]byte, error) {
 	return buf, nil
 }
 
-func loadCcnetDB() {
-	dbOpt, err := option.LoadDBOption(centralDir)
-	if err != nil {
-		log.Fatalf("Failed to load database: %v", err)
-	}
-
-	var dsn string
-	timeout := "&readTimeout=60s" + "&writeTimeout=60s"
-	if dbOpt.UseTLS && dbOpt.SkipVerify {
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?tls=skip-verify%s", dbOpt.User, dbOpt.Password, dbOpt.Host, dbOpt.Port, dbOpt.CcnetDbName, timeout)
-	} else if dbOpt.UseTLS && !dbOpt.SkipVerify {
-		registerCA(dbOpt.CaPath)
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?tls=custom%s", dbOpt.User, dbOpt.Password, dbOpt.Host, dbOpt.Port, dbOpt.CcnetDbName, timeout)
-	} else {
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?tls=%t%s", dbOpt.User, dbOpt.Password, dbOpt.Host, dbOpt.Port, dbOpt.CcnetDbName, dbOpt.UseTLS, timeout)
-	}
-	if dbOpt.Charset != "" {
-		dsn = fmt.Sprintf("%s&charset=%s", dsn, dbOpt.Charset)
-	}
-	ccnetDB, err = sql.Open("mysql", dsn)
-	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
-	}
-	ccnetDB.SetConnMaxLifetime(5 * time.Minute)
-	ccnetDB.SetMaxOpenConns(8)
-	ccnetDB.SetMaxIdleConns(8)
-}
-
-// registerCA registers CA to verify server cert.
-func registerCA(capath string) {
-	rootCertPool := x509.NewCertPool()
-	pem, err := os.ReadFile(capath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if ok := rootCertPool.AppendCertsFromPEM(pem); !ok {
-		log.Fatal("Failed to append PEM.")
-	}
-	mysql.RegisterTLSConfig("custom", &tls.Config{
-		RootCAs: rootCertPool,
-	})
-}
-
-func loadSeafileDB() {
-	dbOpt, err := option.LoadDBOption(centralDir)
-	if err != nil {
-		log.Fatalf("Failed to load database: %v", err)
-	}
-
-	var dsn string
-	timeout := "&readTimeout=60s" + "&writeTimeout=60s"
-	if dbOpt.UseTLS && dbOpt.SkipVerify {
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?tls=skip-verify%s", dbOpt.User, dbOpt.Password, dbOpt.Host, dbOpt.Port, dbOpt.SeafileDbName, timeout)
-	} else if dbOpt.UseTLS && !dbOpt.SkipVerify {
-		registerCA(dbOpt.CaPath)
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?tls=custom%s", dbOpt.User, dbOpt.Password, dbOpt.Host, dbOpt.Port, dbOpt.SeafileDbName, timeout)
-	} else {
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?tls=%t%s", dbOpt.User, dbOpt.Password, dbOpt.Host, dbOpt.Port, dbOpt.SeafileDbName, dbOpt.UseTLS, timeout)
-	}
-	if dbOpt.Charset != "" {
-		dsn = fmt.Sprintf("%s&charset=%s", dsn, dbOpt.Charset)
-	}
-
-	seafileDB, err = sql.Open("mysql", dsn)
-	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
-	}
-	seafileDB.SetConnMaxLifetime(5 * time.Minute)
-	seafileDB.SetMaxOpenConns(8)
-	seafileDB.SetMaxIdleConns(8)
-}
-
 func writePidFile(pid_file_path string) error {
 	file, err := os.OpenFile(pid_file_path, os.O_CREATE|os.O_WRONLY, 0664)
 	if err != nil {
@@ -188,10 +113,12 @@ func removePidfile(pid_file_path string) error {
 func main() {
 	flag.Parse()
 
+	println("1")
 	if centralDir == "" {
 		log.Fatal("central config directory must be specified.")
 	}
 
+	println("2")
 	if pidFilePath != "" {
 		if writePidFile(pidFilePath) != nil {
 			log.Fatal("write pid file failed.")
@@ -202,6 +129,7 @@ func main() {
 		log.Fatalf("central config directory %s doesn't exist: %v.", centralDir, err)
 	}
 
+	println("3")
 	if dataDir == "" {
 		log.Fatal("seafile data directory must be specified.")
 	}
@@ -214,6 +142,7 @@ func main() {
 		log.Fatalf("Failed to convert seafile data dir to absolute path: %v.", err)
 	}
 
+	println("4")
 	if logToStdout {
 		// Use default output (StdOut)
 	} else if logFile == "" {
@@ -241,14 +170,30 @@ func main() {
 		utils.Dup(int(logFp.Fd()), int(os.Stderr.Fd()))
 	}
 	// When logFile is "-", use default output (StdOut)
+	println("5")
 
 	if err := option.LoadSeahubConfig(); err != nil {
 		log.Fatalf("Failed to read seahub config: %v", err)
 	}
 
+	println("6")
 	option.LoadFileServerOptions(centralDir)
-	loadCcnetDB()
-	loadSeafileDB()
+
+	println("7")
+	dbConf, err := db.LoadDatabaseConfig()
+	if err != nil {
+		log.Fatalf("error loading database: %v\n", err)
+	}
+	println("8")
+	ccnetDB, err := db.InitDatabase(dbConf, dbConf.CcnetDbName)
+	if err != nil {
+		log.Fatalf("error loading database: %v\n", err)
+	}
+	seafileDB, err := db.InitDatabase(dbConf, dbConf.SeafileDbName)
+	if err != nil {
+		log.Fatalf("error loading database: %v\n", err)
+	}
+	println("9")
 
 	level, err := log.ParseLevel(option.LogLevel)
 	if err != nil {
@@ -257,8 +202,9 @@ func main() {
 	} else {
 		log.SetLevel(level)
 	}
+	println("10")
 
-	repomgr.Init(seafileDB)
+	repomgr.Init(ccnetDB, seafileDB)
 
 	fsmgr.Init(centralDir, dataDir, option.FsCacheLimit)
 

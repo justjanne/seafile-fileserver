@@ -2,8 +2,9 @@
 package blockmgr
 
 import (
-	"github.com/haiwen/seafile-server/fileserver/objstore"
 	"io"
+
+	"github.com/justjanne/seafile-fileserver/objstore"
 )
 
 var store *objstore.ObjectStore

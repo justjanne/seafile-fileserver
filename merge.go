@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haiwen/seafile-server/fileserver/commitmgr"
-	"github.com/haiwen/seafile-server/fileserver/fsmgr"
-	"github.com/haiwen/seafile-server/fileserver/option"
-	"github.com/haiwen/seafile-server/fileserver/utils"
+	"github.com/justjanne/seafile-fileserver/commitmgr"
+	"github.com/justjanne/seafile-fileserver/fsmgr"
+	"github.com/justjanne/seafile-fileserver/option"
+	"github.com/justjanne/seafile-fileserver/utils"
 )
 
 type mergeOptions struct {

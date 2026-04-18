@@ -8,9 +8,10 @@ import (
 	"time"
 
 	// Change to non-blank imports when use
-	_ "github.com/haiwen/seafile-server/fileserver/blockmgr"
-	"github.com/haiwen/seafile-server/fileserver/commitmgr"
-	"github.com/haiwen/seafile-server/fileserver/option"
+	_ "github.com/justjanne/seafile-fileserver/blockmgr"
+	"github.com/justjanne/seafile-fileserver/commitmgr"
+	"github.com/justjanne/seafile-fileserver/db"
+	"github.com/justjanne/seafile-fileserver/option"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -61,8 +62,8 @@ type VRepoInfo struct {
 var seafileDB *sql.DB
 
 // Init initialize status of repomgr package
-func Init(seafDB *sql.DB) {
-	seafileDB = seafDB
+func Init(ccnet db.Database, seafile db.Database) {
+	seafileDB = seafile.Connection()
 }
 
 // Get returns Repo object by repo ID.

@@ -1,4 +1,4 @@
-module github.com/haiwen/seafile-server/fileserver
+module github.com/justjanne/seafile-fileserver
 
 go 1.22
 
@@ -8,8 +8,9 @@ require (
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.1.1
-	github.com/gorilla/mux v1.7.4
+	github.com/gorilla/mux v1.8.0
 	github.com/json-iterator/go v1.1.12
+	github.com/lib/pq v1.12.3
 	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/text v0.3.8
 	gopkg.in/ini.v1 v1.55.0

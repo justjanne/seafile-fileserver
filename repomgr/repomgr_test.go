@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/haiwen/seafile-server/fileserver/commitmgr"
-	"github.com/haiwen/seafile-server/fileserver/searpc"
+	"github.com/justjanne/seafile-fileserver/commitmgr"
+	"github.com/justjanne/seafile-fileserver/searpc"
 )
 
 const (

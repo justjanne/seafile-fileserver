@@ -10,8 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/haiwen/seafile-server/fileserver/option"
-	"github.com/haiwen/seafile-server/fileserver/repomgr"
+	"github.com/justjanne/seafile-fileserver/db"
+	"github.com/justjanne/seafile-fileserver/option"
+	"github.com/justjanne/seafile-fileserver/repomgr"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -29,9 +30,9 @@ var groupTableName string
 var cloudMode bool
 
 // Init ccnetDB, seafileDB, groupTableName, cloudMode
-func Init(cnDB *sql.DB, seafDB *sql.DB, grpTableName string, clMode bool) {
-	ccnetDB = cnDB
-	seafileDB = seafDB
+func Init(ccnet db.Database, seafile db.Database, grpTableName string, clMode bool) {
+	ccnetDB = ccnet.Connection()
+	seafileDB = seafile.Connection()
 	groupTableName = grpTableName
 	cloudMode = clMode
 }

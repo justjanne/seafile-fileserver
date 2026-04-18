@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/haiwen/seafile-server/fileserver/commitmgr"
-	"github.com/haiwen/seafile-server/fileserver/fsmgr"
-	"github.com/haiwen/seafile-server/fileserver/repomgr"
+	"github.com/justjanne/seafile-fileserver/commitmgr"
+	"github.com/justjanne/seafile-fileserver/fsmgr"
+	"github.com/justjanne/seafile-fileserver/repomgr"
 )
 
 // Empty value of sha1

@@ -5,10 +5,18 @@ ENV GOPROXY=https://proxy.golang.org
 RUN go mod download
 
 COPY . ./
-RUN go build -o notification-server .
+RUN go build -o seafile-fileserver .
 
 FROM alpine
-COPY --from=go_builder /repo/notification-server /
+COPY --from=go_builder /repo/seafile-fileserver /
+
+RUN mkdir -p /config /data /tmp /run/seafile
+RUN chown 1000:1000 /config /data /tmp /run/seafile
+
 USER 1000:1000
 
-ENTRYPOINT ["/notification-server", "-c", "/config"]
+VOLUME /config
+VOLUME /data
+VOLUME /tmp
+
+ENTRYPOINT ["/seafile-fileserver", "-F", "/config", "-d", "/data", "-p", "/run/seafile"]

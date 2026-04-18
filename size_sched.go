@@ -157,7 +157,7 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	var headID string
-	sqlStr := db.RepoSizeGetHeadByRepo
+	sqlStr := db.RepoSizeFindHeadIDByRepoID
 
 	row := trans.QueryRowContext(ctx, sqlStr, repoID)
 	if err := row.Scan(&headID); err != nil {
@@ -168,13 +168,13 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	if headID == "" {
-		_, err = trans.ExecContext(ctx, db.RepoSizeInsert, repoID, size, newHeadID)
+		_, err = trans.ExecContext(ctx, db.RepoSizeSave, repoID, size, newHeadID)
 		if err != nil {
 			trans.Rollback()
 			return err
 		}
 	} else {
-		_, err = trans.ExecContext(ctx, db.RepoSizeSetByRepo, size, newHeadID, repoID)
+		_, err = trans.ExecContext(ctx, db.RepoSizeUpdateSizeAndHeadIDByRepoID, size, newHeadID, repoID)
 		if err != nil {
 			trans.Rollback()
 			return err
@@ -182,7 +182,7 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	var exist int
-	sqlStr = db.RepoFileCountExistsByRepo
+	sqlStr = db.RepoFileCountExistsByRepoID
 	row = trans.QueryRowContext(ctx, sqlStr, repoID)
 	if err := row.Scan(&exist); err != nil {
 		if err != sql.ErrNoRows {
@@ -192,13 +192,13 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	if exist != 0 {
-		_, err = trans.ExecContext(ctx, db.RepoFileCountSetByRepo, fileCount, repoID)
+		_, err = trans.ExecContext(ctx, db.RepoFileCountUpdateFileCountByRepoID, fileCount, repoID)
 		if err != nil {
 			trans.Rollback()
 			return err
 		}
 	} else {
-		_, err = trans.ExecContext(ctx, db.RepoFileCountInsert, repoID, fileCount)
+		_, err = trans.ExecContext(ctx, db.RepoFileCountSave, repoID, fileCount)
 		if err != nil {
 			trans.Rollback()
 			return err

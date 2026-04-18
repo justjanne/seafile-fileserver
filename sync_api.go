@@ -651,7 +651,7 @@ func headCommitsMultiCB(rsp http.ResponseWriter, r *http.Request) *appError {
 	}
 
 	sqlStr := fmt.Sprintf(
-		db.BranchGetRepoCommitMaster,
+		db.BranchFindRepoIDAndCommitIDByRepoIDInAndNameMaster,
 		repoIDs.String())
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
@@ -882,7 +882,7 @@ func getRepoStoreID(repoID string) (string, error) {
 	var rID, originRepoID sql.NullString
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, db.VirtualrepoGetRepoOriginrepo, repoID)
+	row := seafileDB.QueryRowContext(ctx, db.VirtualRepoFindRepoIDAndOriginRepoByRepoID, repoID)
 	if err := row.Scan(&rID, &originRepoID); err != nil {
 		if err == sql.ErrNoRows {
 			vInfo.storeID = repoID
@@ -1221,7 +1221,7 @@ func getHeadCommit(rsp http.ResponseWriter, r *http.Request) *appError {
 	var exists bool
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, db.RepoExistsId, repoID)
+	row := seafileDB.QueryRowContext(ctx, db.RepoExistsByRepoID, repoID)
 	if err := row.Scan(&exists); err != nil {
 		if err != sql.ErrNoRows {
 			log.Errorf("DB error when check repo %s existence: %v", repoID, err)
@@ -1240,7 +1240,7 @@ func getHeadCommit(rsp http.ResponseWriter, r *http.Request) *appError {
 	}
 
 	var commitID string
-	row = seafileDB.QueryRowContext(ctx, db.BranchGetCommitidMaster, repoID)
+	row = seafileDB.QueryRowContext(ctx, db.BranchFindCommitIDByRepoIDAndNameMaster, repoID)
 
 	if err := row.Scan(&commitID); err != nil {
 		if err != sql.ErrNoRows {

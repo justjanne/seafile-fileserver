@@ -99,7 +99,7 @@ func getUserGroups(sqlStr string, args ...interface{}) ([]group, error) {
 }
 
 func getGroupsByUser(userName string, returnAncestors bool) ([]group, error) {
-	sqlStr := fmt.Sprintf(db.GroupGetByUser)
+	sqlStr := fmt.Sprintf(db.GroupFindAllByUserNameOrderByGroupIDDesc)
 	groups, err := getUserGroups(sqlStr, userName)
 	if err != nil {
 		err := fmt.Errorf("Failed to get groups by user %s: %v", userName, err)
@@ -121,7 +121,7 @@ func getGroupsByUser(userName string, returnAncestors bool) ([]group, error) {
 		}
 	}
 	if len(paths) > 0 {
-		paths, err := getGroupPaths(fmt.Sprintf(db.GroupStructureGetPathById, strings.Join(paths, ", ")))
+		paths, err := getGroupPaths(fmt.Sprintf(db.GroupStructureFindAllPathsByGroupIDIn, strings.Join(paths, ", ")))
 		if err != nil {
 			log.Errorf("Failed to get group paths: %v", err)
 		}
@@ -130,7 +130,7 @@ func getGroupsByUser(userName string, returnAncestors bool) ([]group, error) {
 			return nil, err
 		}
 
-		sqlStr = fmt.Sprintf(db.GroupGetById, paths)
+		sqlStr = fmt.Sprintf(db.GroupFindAllByGroupIDInOrderByGroupIDDesc, paths)
 		groups, err := getUserGroups(sqlStr)
 		if err != nil {
 			return nil, err
@@ -181,7 +181,7 @@ func checkGroupPermByUser(repoID string, userName string) (string, error) {
 		groupIds = append(groupIds, strconv.Itoa(group.id))
 	}
 
-	sqlStr := fmt.Sprintf(db.RepoGroupGetPermissionByRepoAndGroup, strings.Join(groupIds, ", "))
+	sqlStr := fmt.Sprintf(db.RepoGroupFindPermissionByRepoIDAndGroupIDIn, strings.Join(groupIds, ", "))
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -216,7 +216,7 @@ func checkGroupPermByUser(repoID string, userName string) (string, error) {
 func checkSharedRepoPerm(repoID string, email string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, db.SharedRepoGetpermissionByRepoAndTo, repoID, email)
+	row := seafileDB.QueryRowContext(ctx, db.SharedRepoFindPermissionByRepoIDAndToEmail, repoID, email)
 
 	var perm string
 	if err := row.Scan(&perm); err != nil {
@@ -231,7 +231,7 @@ func checkSharedRepoPerm(repoID string, email string) (string, error) {
 func checkInnerPubRepoPerm(repoID string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, db.InnerPubRepoGetPermissionByRepo, repoID)
+	row := seafileDB.QueryRowContext(ctx, db.InnerPubRepoFindPermissionByRepoID, repoID)
 
 	var perm string
 	if err := row.Scan(&perm); err != nil {
@@ -283,7 +283,7 @@ func getSharedDirsToUser(originRepoID string, toEmail string) (map[string]string
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	rows, err := seafileDB.QueryContext(ctx, db.SharedRepoGetPathByRepoAndTo, toEmail, originRepoID)
+	rows, err := seafileDB.QueryContext(ctx, db.SharedRepoFindPathAndPermissionByToEmailAndOriginRepo, toEmail, originRepoID)
 	if err != nil {
 		err := fmt.Errorf("Failed to get shared directories by user %s: %v", toEmail, err)
 		return nil, err
@@ -336,7 +336,7 @@ func getSharedDirsToGroup(originRepoID string, groups []group) (map[string]strin
 	dirs := make(map[string]string)
 	groupIDs := convertGroupListToStr(groups)
 
-	sqlStr := fmt.Sprintf(db.RepoGroupGetPathAndPermissionByRepoAndGroup, groupIDs)
+	sqlStr := fmt.Sprintf(db.RepoGroupFindPathAndPermissionByOriginRepoAndGroupIDIn, groupIDs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -419,7 +419,7 @@ func GetReposByOwner(email string) ([]*SharedRepo, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	stmt, err := seafileDB.PrepareContext(ctx, db.RepoOwnerGetByOwner)
+	stmt, err := seafileDB.PrepareContext(ctx, db.RepoOwnerFindAllByOwnerIDOrderByUpdateTimeDescRepoID)
 	if err != nil {
 		return nil, err
 	}
@@ -468,7 +468,7 @@ func GetReposByOwner(email string) ([]*SharedRepo, error) {
 func ListInnerPubRepos() ([]*SharedRepo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	stmt, err := seafileDB.PrepareContext(ctx, db.InnerPubRepoGet)
+	stmt, err := seafileDB.PrepareContext(ctx, db.InnerPubRepoFindAll)
 	if err != nil {
 		return nil, err
 	}
@@ -515,9 +515,9 @@ func ListShareRepos(email, columnType string) ([]*SharedRepo, error) {
 	var repos []*SharedRepo
 	var query string
 	if columnType == "from_email" {
-		query = db.SharedRepoGetByFrom
+		query = db.SharedRepoFindAllByFromEmailOrderByUpdateTimeDescRepoID
 	} else if columnType == "to_email" {
-		query = db.SharedRepoGetByTo
+		query = db.SharedRepoFindAllByToEmailOrderByUpdateTimeDescRepoID
 	} else {
 		err := fmt.Errorf("Wrong column type: %s", columnType)
 		return nil, err
@@ -580,9 +580,9 @@ func GetGroupReposByUser(user string, orgID int) ([]*SharedRepo, error) {
 
 	var query string
 	if orgID < 0 {
-		query = db.RepoGroupGetById
+		query = db.RepoGroupFindAllByGroupIDInOrderByGroupIDDesc
 	} else {
-		query = db.OrgRepoGroupGetById
+		query = db.OrgRepoGroupFindAllByGroupIDInOrderByGroupIDDesc
 	}
 
 	var paths []string

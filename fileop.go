@@ -2164,7 +2164,7 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 	var row *sql.Row
 	var sqlStr string
 	if checkGC {
-		sqlStr = db.GcidGetGcidByRepo
+		sqlStr = db.GCIDFindGCIDByRepoIDForUpdate
 		if originRepoID == "" {
 			row = trans.QueryRowContext(ctx, sqlStr, repoID)
 		} else {
@@ -2187,7 +2187,7 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 
 	var commitID string
 
-	row = trans.QueryRowContext(ctx, db.BranchGetCommitByNameAndRepo, "master", repoID)
+	row = trans.QueryRowContext(ctx, db.BranchFindCommitIDByNameAndRepoIDForUpdate, "master", repoID)
 	if err := row.Scan(&commitID); err != nil {
 		if err != sql.ErrNoRows {
 			trans.Rollback()
@@ -2200,7 +2200,7 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 		return false, err
 	}
 
-	sqlStr = db.BranchSetCommitByNameAndRepo
+	sqlStr = db.BranchUpdateCommitIDByNameAndRepoID
 	_, err = trans.ExecContext(ctx, sqlStr, newCommitID, "master", repoID)
 	if err != nil {
 		trans.Rollback()

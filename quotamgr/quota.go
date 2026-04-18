@@ -71,7 +71,7 @@ func CheckQuota(repoID string, delta int64) (int, error) {
 
 func GetUserQuota(user string) (int64, error) {
 	var quota int64
-	sqlStr := db.UserQuotaGetQuotaByUser
+	sqlStr := db.UserQuotaFindQuotaByUser
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
 	row := seafileDB.QueryRowContext(ctx, sqlStr, user)
@@ -90,7 +90,7 @@ func GetUserQuota(user string) (int64, error) {
 
 func GetUserUsage(user string) (int64, error) {
 	var usage sql.NullInt64
-	sqlStr := db.UserQuotaGetUsageByUser
+	sqlStr := db.RepoOwnerFindTotalUsageByOwnerID
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()

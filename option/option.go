@@ -9,7 +9,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/ini.v1"
+	ini "gopkg.in/ini.v1"
 )
 
 // InfiniteQuota indicates that the quota is unlimited.
@@ -338,11 +338,17 @@ func LoadSeahubConfig() error {
 		return fmt.Errorf("failed to read JWT_PRIVATE_KEY")
 	}
 
-	siteRoot := os.Getenv("SITE_ROOT")
-	if siteRoot != "" {
-		SeahubURL = fmt.Sprintf("http://127.0.0.1:8000%sapi/v2.1/internal", siteRoot)
-	} else {
-		SeahubURL = "http://127.0.0.1:8000/api/v2.1/internal"
+	serviceUrl := os.Getenv("INNER_SERVICE_URL")
+	if serviceUrl == "" {
+		serviceUrl = "http://127.0.0.1:8000"
+	}
+	if SeahubURL == "" {
+		siteRoot := os.Getenv("SITE_ROOT")
+		if siteRoot != "" {
+			SeahubURL = fmt.Sprintf("%s%sapi/v2.1/internal", serviceUrl, siteRoot)
+		} else {
+			SeahubURL = fmt.Sprintf("%s/api/v2.1/internal", serviceUrl)
+		}
 	}
 
 	return nil

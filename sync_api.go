@@ -20,6 +20,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/justjanne/seafile-fileserver/blockmgr"
 	"github.com/justjanne/seafile-fileserver/commitmgr"
+	"github.com/justjanne/seafile-fileserver/db"
 	"github.com/justjanne/seafile-fileserver/diff"
 	"github.com/justjanne/seafile-fileserver/fsmgr"
 	"github.com/justjanne/seafile-fileserver/option"
@@ -650,7 +651,7 @@ func headCommitsMultiCB(rsp http.ResponseWriter, r *http.Request) *appError {
 	}
 
 	sqlStr := fmt.Sprintf(
-		"SELECT repo_id, commit_id FROM Branch WHERE name='master' AND repo_id IN (%s) LOCK IN SHARE MODE",
+		db.BranchGetRepoCommitMaster,
 		repoIDs.String())
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
@@ -879,10 +880,9 @@ func getRepoStoreID(repoID string) (string, error) {
 
 	var vInfo virtualRepoInfo
 	var rID, originRepoID sql.NullString
-	sqlStr := "SELECT repo_id, origin_repo FROM VirtualRepo where repo_id = $1"
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, sqlStr, repoID)
+	row := seafileDB.QueryRowContext(ctx, db.VirtualrepoGetRepoOriginrepo, repoID)
 	if err := row.Scan(&rID, &originRepoID); err != nil {
 		if err == sql.ErrNoRows {
 			vInfo.storeID = repoID
@@ -1218,11 +1218,10 @@ func includeInvalidPath(baseCommit, newCommit *commitmgr.Commit) bool {
 func getHeadCommit(rsp http.ResponseWriter, r *http.Request) *appError {
 	vars := mux.Vars(r)
 	repoID := vars["repoid"]
-	sqlStr := "SELECT EXISTS(SELECT 1 FROM Repo WHERE repo_id=$1)"
 	var exists bool
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, sqlStr, repoID)
+	row := seafileDB.QueryRowContext(ctx, db.RepoExistsId, repoID)
 	if err := row.Scan(&exists); err != nil {
 		if err != sql.ErrNoRows {
 			log.Errorf("DB error when check repo %s existence: %v", repoID, err)
@@ -1241,8 +1240,7 @@ func getHeadCommit(rsp http.ResponseWriter, r *http.Request) *appError {
 	}
 
 	var commitID string
-	sqlStr = "SELECT commit_id FROM Branch WHERE name='master' AND repo_id=$1"
-	row = seafileDB.QueryRowContext(ctx, sqlStr, repoID)
+	row = seafileDB.QueryRowContext(ctx, db.BranchGetCommitidMaster, repoID)
 
 	if err := row.Scan(&commitID); err != nil {
 		if err != sql.ErrNoRows {

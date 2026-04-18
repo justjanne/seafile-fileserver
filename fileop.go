@@ -32,6 +32,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/justjanne/seafile-fileserver/blockmgr"
 	"github.com/justjanne/seafile-fileserver/commitmgr"
+	"github.com/justjanne/seafile-fileserver/db"
 	"github.com/justjanne/seafile-fileserver/diff"
 	"github.com/justjanne/seafile-fileserver/fsmgr"
 	"github.com/justjanne/seafile-fileserver/option"
@@ -2163,7 +2164,7 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 	var row *sql.Row
 	var sqlStr string
 	if checkGC {
-		sqlStr = "SELECT gc_id FROM GCID WHERE repo_id = $1 FOR UPDATE"
+		sqlStr = db.GcidGetGcidByRepo
 		if originRepoID == "" {
 			row = trans.QueryRowContext(ctx, sqlStr, repoID)
 		} else {
@@ -2185,10 +2186,8 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 	}
 
 	var commitID string
-	name := "master"
-	sqlStr = "SELECT commit_id FROM Branch WHERE name = $1 AND repo_id = $2 FOR UPDATE"
 
-	row = trans.QueryRowContext(ctx, sqlStr, name, repoID)
+	row = trans.QueryRowContext(ctx, db.BranchGetCommitByNameAndRepo, "master", repoID)
 	if err := row.Scan(&commitID); err != nil {
 		if err != sql.ErrNoRows {
 			trans.Rollback()
@@ -2201,8 +2200,8 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 		return false, err
 	}
 
-	sqlStr = "UPDATE Branch SET commit_id = $1 WHERE name = $2 AND repo_id = $3"
-	_, err = trans.ExecContext(ctx, sqlStr, newCommitID, name, repoID)
+	sqlStr = db.BranchSetCommitByNameAndRepo
+	_, err = trans.ExecContext(ctx, sqlStr, newCommitID, "master", repoID)
 	if err != nil {
 		trans.Rollback()
 		return false, err

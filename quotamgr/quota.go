@@ -71,7 +71,7 @@ func CheckQuota(repoID string, delta int64) (int, error) {
 
 func GetUserQuota(user string) (int64, error) {
 	var quota int64
-	sqlStr := "SELECT quota FROM UserQuota WHERE \"user\"=$1"
+	sqlStr := db.UserQuotaGetQuotaByUser
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
 	row := seafileDB.QueryRowContext(ctx, sqlStr, user)
@@ -90,7 +90,7 @@ func GetUserQuota(user string) (int64, error) {
 
 func GetUserUsage(user string) (int64, error) {
 	var usage sql.NullInt64
-	sqlStr := "SELECT SUM(size) FROM RepoOwner o LEFT JOIN VirtualRepo v ON o.repo_id=v.repo_id, RepoSize WHERE owner_id=$1 AND o.repo_id=RepoSize.repo_id AND v.repo_id IS NULL"
+	sqlStr := db.UserQuotaGetUsageByUser
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()

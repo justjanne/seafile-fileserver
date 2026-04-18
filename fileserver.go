@@ -207,7 +207,7 @@ func main() {
 
 	commitmgr.Init(centralDir, dataDir)
 
-	share.Init(dbCcnet, dbSeafile, option.GroupTableName, option.CloudMode)
+	share.Init(dbCcnet, dbSeafile, option.CloudMode)
 
 	quotamgr.Init(dbCcnet, dbSeafile)
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/justjanne/seafile-fileserver/db"
 	ini "gopkg.in/ini.v1"
 
 	"database/sql"
@@ -156,7 +157,7 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	var headID string
-	sqlStr := "SELECT head_id FROM RepoSize WHERE repo_id=$1"
+	sqlStr := db.RepoSizeGetHeadByRepo
 
 	row := trans.QueryRowContext(ctx, sqlStr, repoID)
 	if err := row.Scan(&headID); err != nil {
@@ -167,15 +168,13 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	if headID == "" {
-		sqlStr := "INSERT INTO RepoSize (repo_id, size, head_id) VALUES ($1, $2, $3)"
-		_, err = trans.ExecContext(ctx, sqlStr, repoID, size, newHeadID)
+		_, err = trans.ExecContext(ctx, db.RepoSizeInsert, repoID, size, newHeadID)
 		if err != nil {
 			trans.Rollback()
 			return err
 		}
 	} else {
-		sqlStr = "UPDATE RepoSize SET size = $1, head_id = $2 WHERE repo_id = $3"
-		_, err = trans.ExecContext(ctx, sqlStr, size, newHeadID, repoID)
+		_, err = trans.ExecContext(ctx, db.RepoSizeSetByRepo, size, newHeadID, repoID)
 		if err != nil {
 			trans.Rollback()
 			return err
@@ -183,7 +182,7 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	var exist int
-	sqlStr = "SELECT 1 FROM RepoFileCount WHERE repo_id=$1"
+	sqlStr = db.RepoFileCountExistsByRepo
 	row = trans.QueryRowContext(ctx, sqlStr, repoID)
 	if err := row.Scan(&exist); err != nil {
 		if err != sql.ErrNoRows {
@@ -193,15 +192,13 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	if exist != 0 {
-		sqlStr := "UPDATE RepoFileCount SET file_count=$1 WHERE repo_id=$2"
-		_, err = trans.ExecContext(ctx, sqlStr, fileCount, repoID)
+		_, err = trans.ExecContext(ctx, db.RepoFileCountSetByRepo, fileCount, repoID)
 		if err != nil {
 			trans.Rollback()
 			return err
 		}
 	} else {
-		sqlStr := "INSERT INTO RepoFileCount (repo_id,file_count) VALUES ($1,$2)"
-		_, err = trans.ExecContext(ctx, sqlStr, repoID, fileCount)
+		_, err = trans.ExecContext(ctx, db.RepoFileCountInsert, repoID, fileCount)
 		if err != nil {
 			trans.Rollback()
 			return err

@@ -30,10 +30,9 @@ var groupTableName string
 var cloudMode bool
 
 // Init ccnetDB, seafileDB, groupTableName, cloudMode
-func Init(ccnet db.Database, seafile db.Database, grpTableName string, clMode bool) {
+func Init(ccnet db.Database, seafile db.Database, clMode bool) {
 	ccnetDB = ccnet.Connection()
 	seafileDB = seafile.Connection()
-	groupTableName = grpTableName
 	cloudMode = clMode
 }
 
@@ -100,8 +99,7 @@ func getUserGroups(sqlStr string, args ...interface{}) ([]group, error) {
 }
 
 func getGroupsByUser(userName string, returnAncestors bool) ([]group, error) {
-	sqlStr := fmt.Sprintf("SELECT g.group_id, group_name, creator_name, timestamp, parent_group_id FROM \"%s\" g, GroupUser u WHERE g.group_id = u.group_id AND user_name=$1 ORDER BY g.group_id DESC",
-		groupTableName)
+	sqlStr := fmt.Sprintf(db.GroupGetByUser)
 	groups, err := getUserGroups(sqlStr, userName)
 	if err != nil {
 		err := fmt.Errorf("Failed to get groups by user %s: %v", userName, err)
@@ -111,25 +109,19 @@ func getGroupsByUser(userName string, returnAncestors bool) ([]group, error) {
 		return groups, nil
 	}
 
-	sqlStr = ""
+	var paths []string
 	var ret []group
 	for _, group := range groups {
 		parentGroupID := group.parentGroupID
 		groupID := group.id
 		if parentGroupID != 0 {
-			if sqlStr == "" {
-				sqlStr = fmt.Sprintf("SELECT path FROM GroupStructure WHERE group_id IN (%d",
-					groupID)
-			} else {
-				sqlStr += fmt.Sprintf(", %d", groupID)
-			}
+			paths = append(paths, strconv.Itoa(groupID))
 		} else {
 			ret = append(ret, group)
 		}
 	}
-	if sqlStr != "" {
-		sqlStr += ")"
-		paths, err := getGroupPaths(sqlStr)
+	if len(paths) > 0 {
+		paths, err := getGroupPaths(fmt.Sprintf(db.GroupStructureGetPathById, strings.Join(paths, ", ")))
 		if err != nil {
 			log.Errorf("Failed to get group paths: %v", err)
 		}
@@ -138,7 +130,7 @@ func getGroupsByUser(userName string, returnAncestors bool) ([]group, error) {
 			return nil, err
 		}
 
-		sqlStr = fmt.Sprintf("SELECT g.group_id, group_name, creator_name, timestamp, parent_group_id FROM \"%s\" g WHERE g.group_id IN (%s) ORDER BY g.group_id DESC", groupTableName, paths)
+		sqlStr = fmt.Sprintf(db.GroupGetById, paths)
 		groups, err := getUserGroups(sqlStr)
 		if err != nil {
 			return nil, err
@@ -184,19 +176,16 @@ func checkGroupPermByUser(repoID string, userName string) (string, error) {
 		return "", nil
 	}
 
-	var sqlBuilder strings.Builder
-	sqlBuilder.WriteString("SELECT permission FROM RepoGroup WHERE repo_id = $1 AND group_id IN (")
-	for i := 0; i < len(groups); i++ {
-		sqlBuilder.WriteString(strconv.Itoa(groups[i].id))
-		if i+1 < len(groups) {
-			sqlBuilder.WriteString(",")
-		}
+	var groupIds []string
+	for _, group := range groups {
+		groupIds = append(groupIds, strconv.Itoa(group.id))
 	}
-	sqlBuilder.WriteString(")")
+
+	sqlStr := fmt.Sprintf(db.RepoGroupGetPermissionByRepoAndGroup, strings.Join(groupIds, ", "))
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	rows, err := seafileDB.QueryContext(ctx, sqlBuilder.String(), repoID)
+	rows, err := seafileDB.QueryContext(ctx, sqlStr, repoID)
 	if err != nil {
 		err := fmt.Errorf("Failed to get group permission by user %s: %v", userName, err)
 		return "", err
@@ -225,10 +214,9 @@ func checkGroupPermByUser(repoID string, userName string) (string, error) {
 }
 
 func checkSharedRepoPerm(repoID string, email string) (string, error) {
-	sqlStr := "SELECT permission FROM SharedRepo WHERE repo_id=$1 AND to_email=$2"
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, sqlStr, repoID, email)
+	row := seafileDB.QueryRowContext(ctx, db.SharedRepoGetpermissionByRepoAndTo, repoID, email)
 
 	var perm string
 	if err := row.Scan(&perm); err != nil {
@@ -241,10 +229,9 @@ func checkSharedRepoPerm(repoID string, email string) (string, error) {
 }
 
 func checkInnerPubRepoPerm(repoID string) (string, error) {
-	sqlStr := "SELECT permission FROM InnerPubRepo WHERE repo_id=$1"
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, sqlStr, repoID)
+	row := seafileDB.QueryRowContext(ctx, db.InnerPubRepoGetPermissionByRepo, repoID)
 
 	var perm string
 	if err := row.Scan(&perm); err != nil {
@@ -293,11 +280,10 @@ func checkRepoSharePerm(repoID string, userName string) string {
 
 func getSharedDirsToUser(originRepoID string, toEmail string) (map[string]string, error) {
 	dirs := make(map[string]string)
-	sqlStr := "SELECT v.path, s.permission FROM SharedRepo s, VirtualRepo v WHERE s.repo_id = v.repo_id AND s.to_email = $1 AND v.origin_repo = $2"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	rows, err := seafileDB.QueryContext(ctx, sqlStr, toEmail, originRepoID)
+	rows, err := seafileDB.QueryContext(ctx, db.SharedRepoGetPathByRepoAndTo, toEmail, originRepoID)
 	if err != nil {
 		err := fmt.Errorf("Failed to get shared directories by user %s: %v", toEmail, err)
 		return nil, err
@@ -350,7 +336,7 @@ func getSharedDirsToGroup(originRepoID string, groups []group) (map[string]strin
 	dirs := make(map[string]string)
 	groupIDs := convertGroupListToStr(groups)
 
-	sqlStr := fmt.Sprintf("SELECT v.path, s.permission FROM RepoGroup s, VirtualRepo v WHERE s.repo_id = v.repo_id AND v.origin_repo = $1 AND s.group_id in (%s)", groupIDs)
+	sqlStr := fmt.Sprintf(db.RepoGroupGetPathAndPermissionByRepoAndGroup, groupIDs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -431,11 +417,9 @@ type SharedRepo struct {
 func GetReposByOwner(email string) ([]*SharedRepo, error) {
 	var repos []*SharedRepo
 
-	query := "SELECT o.repo_id, b.commit_id, i.name, i.version, i.update_time, i.last_modifier, i.type FROM RepoOwner o LEFT JOIN Branch b ON o.repo_id = b.repo_id LEFT JOIN RepoInfo i ON o.repo_id = i.repo_id LEFT JOIN VirtualRepo v ON o.repo_id = v.repo_id WHERE owner_id=$1 AND v.repo_id IS NULL ORDER BY i.update_time DESC, o.repo_id"
-
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	stmt, err := seafileDB.PrepareContext(ctx, query)
+	stmt, err := seafileDB.PrepareContext(ctx, db.RepoOwnerGetByOwner)
 	if err != nil {
 		return nil, err
 	}
@@ -482,11 +466,9 @@ func GetReposByOwner(email string) ([]*SharedRepo, error) {
 
 // ListInnerPubRepos get inner public repos
 func ListInnerPubRepos() ([]*SharedRepo, error) {
-	query := "SELECT InnerPubRepo.repo_id, owner_id, permission, commit_id, i.name, i.update_time, i.version, i.type FROM InnerPubRepo LEFT JOIN RepoInfo i ON InnerPubRepo.repo_id = i.repo_id, RepoOwner, Branch WHERE InnerPubRepo.repo_id=RepoOwner.repo_id AND InnerPubRepo.repo_id = Branch.repo_id AND Branch.name = 'master'"
-
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	stmt, err := seafileDB.PrepareContext(ctx, query)
+	stmt, err := seafileDB.PrepareContext(ctx, db.InnerPubRepoGet)
 	if err != nil {
 		return nil, err
 	}
@@ -533,9 +515,9 @@ func ListShareRepos(email, columnType string) ([]*SharedRepo, error) {
 	var repos []*SharedRepo
 	var query string
 	if columnType == "from_email" {
-		query = "SELECT sh.repo_id, to_email, permission, commit_id, i.name, i.update_time, i.version, i.type FROM SharedRepo sh LEFT JOIN RepoInfo i ON sh.repo_id = i.repo_id, Branch b WHERE from_email=$1 AND sh.repo_id = b.repo_id AND b.name = 'master' ORDER BY i.update_time DESC, sh.repo_id"
+		query = db.SharedRepoGetByFrom
 	} else if columnType == "to_email" {
-		query = "SELECT sh.repo_id, from_email, permission, commit_id, i.name, i.update_time, i.version, i.type FROM SharedRepo sh LEFT JOIN RepoInfo i ON sh.repo_id = i.repo_id, Branch b WHERE to_email=$1 AND sh.repo_id = b.repo_id AND b.name = 'master' ORDER BY i.update_time DESC, sh.repo_id"
+		query = db.SharedRepoGetByTo
 	} else {
 		err := fmt.Errorf("Wrong column type: %s", columnType)
 		return nil, err
@@ -596,24 +578,23 @@ func GetGroupReposByUser(user string, orgID int) ([]*SharedRepo, error) {
 		return nil, nil
 	}
 
-	var sqlBuilder strings.Builder
+	var query string
 	if orgID < 0 {
-		sqlBuilder.WriteString("SELECT g.repo_id, user_name, permission, commit_id, i.name, i.update_time, i.version, i.type FROM RepoGroup g LEFT JOIN RepoInfo i ON g.repo_id = i.repo_id, Branch b WHERE g.repo_id = b.repo_id AND b.name = 'master' AND group_id IN (")
+		query = db.RepoGroupGetById
 	} else {
-		sqlBuilder.WriteString("SELECT g.repo_id, owner, permission, commit_id, i.name, i.update_time, i.version, i.type FROM OrgGroupRepo g LEFT JOIN RepoInfo i ON g.repo_id = i.repo_id, Branch b WHERE g.repo_id = b.repo_id AND b.name = 'master' AND group_id IN (")
+		query = db.OrgRepoGroupGetById
 	}
 
-	for i := 0; i < len(groups); i++ {
-		sqlBuilder.WriteString(strconv.Itoa(groups[i].id))
-		if i+1 < len(groups) {
-			sqlBuilder.WriteString(",")
-		}
+	var paths []string
+	for _, group := range groups {
+		paths = append(paths, strconv.Itoa(group.id))
 	}
-	sqlBuilder.WriteString(" ) ORDER BY group_id")
+
+	sqlStr := fmt.Sprintf(query, strings.Join(paths, ", "))
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	rows, err := seafileDB.QueryContext(ctx, sqlBuilder.String())
+	rows, err := seafileDB.QueryContext(ctx, sqlStr)
 	if err != nil {
 		return nil, err
 	}

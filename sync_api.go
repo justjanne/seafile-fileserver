@@ -650,8 +650,7 @@ func headCommitsMultiCB(rsp http.ResponseWriter, r *http.Request) *appError {
 	}
 
 	sqlStr := fmt.Sprintf(
-		"SELECT repo_id, commit_id FROM Branch WHERE name='master' AND "+
-			"repo_id IN (%s) LOCK IN SHARE MODE",
+		"SELECT repo_id, commit_id FROM Branch WHERE name='master' AND repo_id IN (%s) LOCK IN SHARE MODE",
 		repoIDs.String())
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)

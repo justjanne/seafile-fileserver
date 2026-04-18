@@ -21,6 +21,7 @@ import (
 	"github.com/justjanne/seafile-fileserver/fsmgr"
 	"github.com/justjanne/seafile-fileserver/metrics"
 	"github.com/justjanne/seafile-fileserver/option"
+	"github.com/justjanne/seafile-fileserver/quotamgr"
 	"github.com/justjanne/seafile-fileserver/repomgr"
 	"github.com/justjanne/seafile-fileserver/searpc"
 	"github.com/justjanne/seafile-fileserver/share"
@@ -36,8 +37,6 @@ var logFile, absLogFile string
 var rpcPipePath string
 var pidFilePath string
 var logFp *os.File
-
-var seafileDB, ccnetDB *sql.DB
 
 var logToStdout bool
 
@@ -110,15 +109,16 @@ func removePidfile(pid_file_path string) error {
 	return nil
 }
 
+var seafileDB *sql.DB
+var ccnetDB *sql.DB
+
 func main() {
 	flag.Parse()
 
-	println("1")
 	if centralDir == "" {
 		log.Fatal("central config directory must be specified.")
 	}
 
-	println("2")
 	if pidFilePath != "" {
 		if writePidFile(pidFilePath) != nil {
 			log.Fatal("write pid file failed.")
@@ -129,7 +129,6 @@ func main() {
 		log.Fatalf("central config directory %s doesn't exist: %v.", centralDir, err)
 	}
 
-	println("3")
 	if dataDir == "" {
 		log.Fatal("seafile data directory must be specified.")
 	}
@@ -142,7 +141,6 @@ func main() {
 		log.Fatalf("Failed to convert seafile data dir to absolute path: %v.", err)
 	}
 
-	println("4")
 	if logToStdout {
 		// Use default output (StdOut)
 	} else if logFile == "" {
@@ -170,30 +168,25 @@ func main() {
 		utils.Dup(int(logFp.Fd()), int(os.Stderr.Fd()))
 	}
 	// When logFile is "-", use default output (StdOut)
-	println("5")
 
 	if err := option.LoadSeahubConfig(); err != nil {
 		log.Fatalf("Failed to read seahub config: %v", err)
 	}
 
-	println("6")
 	option.LoadFileServerOptions(centralDir)
 
-	println("7")
 	dbConf, err := db.LoadDatabaseConfig()
 	if err != nil {
 		log.Fatalf("error loading database: %v\n", err)
 	}
-	println("8")
-	ccnetDB, err := db.InitDatabase(dbConf, dbConf.CcnetDbName)
+	dbCcnet, err := db.InitDatabase(dbConf, dbConf.CcnetDbName)
 	if err != nil {
 		log.Fatalf("error loading database: %v\n", err)
 	}
-	seafileDB, err := db.InitDatabase(dbConf, dbConf.SeafileDbName)
+	dbSeafile, err := db.InitDatabase(dbConf, dbConf.SeafileDbName)
 	if err != nil {
 		log.Fatalf("error loading database: %v\n", err)
 	}
-	println("9")
 
 	level, err := log.ParseLevel(option.LogLevel)
 	if err != nil {
@@ -202,9 +195,11 @@ func main() {
 	} else {
 		log.SetLevel(level)
 	}
-	println("10")
 
-	repomgr.Init(ccnetDB, seafileDB)
+	ccnetDB = dbCcnet.Connection()
+	seafileDB = dbSeafile.Connection()
+
+	repomgr.Init(dbCcnet, dbSeafile)
 
 	fsmgr.Init(centralDir, dataDir, option.FsCacheLimit)
 
@@ -212,7 +207,9 @@ func main() {
 
 	commitmgr.Init(centralDir, dataDir)
 
-	share.Init(ccnetDB, seafileDB, option.GroupTableName, option.CloudMode)
+	share.Init(dbCcnet, dbSeafile, option.GroupTableName, option.CloudMode)
+
+	quotamgr.Init(dbCcnet, dbSeafile)
 
 	rpcClientInit()
 

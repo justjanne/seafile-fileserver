@@ -68,10 +68,7 @@ func Init(ccnet db.Database, seafile db.Database) {
 
 // Get returns Repo object by repo ID.
 func Get(id string) *Repo {
-	query := `SELECT r.repo_id, b.commit_id, v.origin_repo, v.path, v.base_commit FROM ` +
-		`Repo r LEFT JOIN Branch b ON r.repo_id = b.repo_id ` +
-		`LEFT JOIN VirtualRepo v ON r.repo_id = v.repo_id ` +
-		`WHERE r.repo_id = ? AND b.name = 'master'`
+	query := "SELECT r.repo_id, b.commit_id, v.origin_repo, v.path, v.base_commit FROM Repo r LEFT JOIN Branch b ON r.repo_id = b.repo_id LEFT JOIN VirtualRepo v ON r.repo_id = v.repo_id WHERE r.repo_id = $1 AND b.name = 'master'"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -200,10 +197,7 @@ func RepoToCommit(repo *Repo, commit *commitmgr.Commit) {
 // GetEx return repo object even if it's corrupted.
 func GetEx(id string) *Repo {
 	repo := new(Repo)
-	query := `SELECT r.repo_id, b.commit_id, v.origin_repo, v.path, v.base_commit FROM ` +
-		`Repo r LEFT JOIN Branch b ON r.repo_id = b.repo_id ` +
-		`LEFT JOIN VirtualRepo v ON r.repo_id = v.repo_id ` +
-		`WHERE r.repo_id = ? AND b.name = 'master'`
+	query := "SELECT r.repo_id, b.commit_id, v.origin_repo, v.path, v.base_commit FROM Repo r LEFT JOIN Branch b ON r.repo_id = b.repo_id LEFT JOIN VirtualRepo v ON r.repo_id = v.repo_id WHERE r.repo_id = $1 AND b.name = 'master'"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -300,7 +294,7 @@ func GetEx(id string) *Repo {
 
 // GetVirtualRepoInfo return virtual repo info by repo id.
 func GetVirtualRepoInfo(repoID string) (*VRepoInfo, error) {
-	sqlStr := "SELECT repo_id, origin_repo, path, base_commit FROM VirtualRepo WHERE repo_id = ?"
+	sqlStr := "SELECT repo_id, origin_repo, path, base_commit FROM VirtualRepo WHERE repo_id = $1"
 	vRepoInfo := new(VRepoInfo)
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
@@ -317,8 +311,7 @@ func GetVirtualRepoInfo(repoID string) (*VRepoInfo, error) {
 
 // GetVirtualRepoInfoByOrigin return virtual repo info by origin repo id.
 func GetVirtualRepoInfoByOrigin(originRepo string) ([]*VRepoInfo, error) {
-	sqlStr := "SELECT repo_id, origin_repo, path, base_commit " +
-		"FROM VirtualRepo WHERE origin_repo=?"
+	sqlStr := "SELECT repo_id, origin_repo, path, base_commit FROM VirtualRepo WHERE origin_repo=$1"
 	var vRepos []*VRepoInfo
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -343,7 +336,7 @@ func GetVirtualRepoInfoByOrigin(originRepo string) ([]*VRepoInfo, error) {
 // GetEmailByToken return user's email by token.
 func GetEmailByToken(repoID string, token string) (string, error) {
 	var email string
-	sqlStr := "SELECT email FROM RepoUserToken WHERE repo_id = ? AND token = ?"
+	sqlStr := "SELECT email FROM RepoUserToken WHERE repo_id = $1 AND token = $2"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -361,9 +354,7 @@ func GetRepoStatus(repoID string) (int, error) {
 	var status int = -1
 
 	// First, check origin repo's status.
-	sqlStr := "SELECT i.status FROM VirtualRepo v LEFT JOIN RepoInfo i " +
-		"ON i.repo_id=v.origin_repo WHERE v.repo_id=? " +
-		"AND i.repo_id IS NOT NULL"
+	sqlStr := "SELECT i.status FROM VirtualRepo v LEFT JOIN RepoInfo i ON i.repo_id=v.origin_repo WHERE v.repo_id=$1 AND i.repo_id IS NOT NULL"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -380,7 +371,7 @@ func GetRepoStatus(repoID string) (int, error) {
 	}
 
 	// Then, check repo's own status.
-	sqlStr = "SELECT status FROM RepoInfo WHERE repo_id=?"
+	sqlStr = "SELECT status FROM RepoInfo WHERE repo_id=$1"
 	row = seafileDB.QueryRowContext(ctx, sqlStr, repoID)
 	if err := row.Scan(&status); err != nil {
 		if err != sql.ErrNoRows {
@@ -393,7 +384,7 @@ func GetRepoStatus(repoID string) (int, error) {
 // TokenPeerInfoExists check if the token exists.
 func TokenPeerInfoExists(token string) (bool, error) {
 	var exists string
-	sqlStr := "SELECT token FROM RepoTokenPeerInfo WHERE token=?"
+	sqlStr := "SELECT token FROM RepoTokenPeerInfo WHERE token=$1"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -409,8 +400,7 @@ func TokenPeerInfoExists(token string) (bool, error) {
 
 // AddTokenPeerInfo add token peer info to RepoTokenPeerInfo table.
 func AddTokenPeerInfo(token, peerID, peerIP, peerName, clientVer string, syncTime int64) error {
-	sqlStr := "INSERT INTO RepoTokenPeerInfo (token, peer_id, peer_ip, peer_name, sync_time, client_ver)" +
-		"VALUES (?, ?, ?, ?, ?, ?)"
+	sqlStr := "INSERT INTO RepoTokenPeerInfo (token, peer_id, peer_ip, peer_name, sync_time, client_ver) VALUES ($1, $2, $3, $4, $5, $6)"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -422,8 +412,7 @@ func AddTokenPeerInfo(token, peerID, peerIP, peerName, clientVer string, syncTim
 
 // UpdateTokenPeerInfo update token peer info to RepoTokenPeerInfo table.
 func UpdateTokenPeerInfo(token, peerID, clientVer string, syncTime int64) error {
-	sqlStr := "UPDATE RepoTokenPeerInfo SET " +
-		"peer_ip=?, sync_time=?, client_ver=? WHERE token=?"
+	sqlStr := "UPDATE RepoTokenPeerInfo SET peer_ip=$1, sync_time=$2, client_ver=$3 WHERE token=$4"
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
 	if _, err := seafileDB.ExecContext(ctx, sqlStr, peerID, syncTime, clientVer, token); err != nil {
@@ -443,7 +432,7 @@ func GetUploadTmpFile(repoID, filePath string) (string, error) {
 	}
 
 	var tmpFile string
-	sqlStr := "SELECT tmp_file_path FROM WebUploadTempFiles WHERE repo_id = ? AND file_path = ?"
+	sqlStr := "SELECT tmp_file_path FROM WebUploadTempFiles WHERE repo_id = $1 AND file_path = $2"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -471,7 +460,7 @@ func AddUploadTmpFile(repoID, filePath, tmpFile string) error {
 		filePath = "/" + filePath
 	}
 
-	sqlStr := "INSERT INTO WebUploadTempFiles (repo_id, file_path, tmp_file_path) VALUES (?, ?, ?)"
+	sqlStr := "INSERT INTO WebUploadTempFiles (repo_id, file_path, tmp_file_path) VALUES ($1, $2, $3)"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -493,7 +482,7 @@ func DelUploadTmpFile(repoID, filePath string) error {
 		filePath = "/" + filePath
 	}
 
-	sqlStr := "DELETE FROM WebUploadTempFiles WHERE repo_id = ? AND file_path IN (?, ?)"
+	sqlStr := "DELETE FROM WebUploadTempFiles WHERE repo_id = $1 AND file_path IN ($2, $3)"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -509,7 +498,7 @@ func setRepoCommitToDb(repoID, repoName string, updateTime int64, version int, i
 	var exists int
 	var encrypted int
 
-	sqlStr := "SELECT 1 FROM RepoInfo WHERE repo_id=?"
+	sqlStr := "SELECT 1 FROM RepoInfo WHERE repo_id=$1"
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
 	row := seafileDB.QueryRowContext(ctx, sqlStr, repoID)
@@ -527,14 +516,12 @@ func setRepoCommitToDb(repoID, repoName string, updateTime int64, version int, i
 	}
 
 	if exists == 1 {
-		sqlStr := "UPDATE RepoInfo SET name=?, update_time=?, version=?, is_encrypted=?, " +
-			"last_modifier=? WHERE repo_id=?"
+		sqlStr := "UPDATE RepoInfo SET name=$1, update_time=$2, version=$3, is_encrypted=$4, last_modifier=$5 WHERE repo_id=$6"
 		if _, err := seafileDB.ExecContext(ctx, sqlStr, repoName, updateTime, version, encrypted, lastModifier, repoID); err != nil {
 			return err
 		}
 	} else {
-		sqlStr := "INSERT INTO RepoInfo (repo_id, name, update_time, version, is_encrypted, last_modifier) " +
-			"VALUES (?, ?, ?, ?, ?, ?)"
+		sqlStr := "INSERT INTO RepoInfo (repo_id, name, update_time, version, is_encrypted, last_modifier) VALUES ($1, $2, $3, $4, $5, $6)"
 		if _, err := seafileDB.ExecContext(ctx, sqlStr, repoID, repoName, updateTime, version, encrypted, lastModifier); err != nil {
 			return err
 		}
@@ -545,7 +532,7 @@ func setRepoCommitToDb(repoID, repoName string, updateTime int64, version int, i
 
 // SetVirtualRepoBaseCommitPath updates the table of VirtualRepo.
 func SetVirtualRepoBaseCommitPath(repoID, baseCommitID, newPath string) error {
-	sqlStr := "UPDATE VirtualRepo SET base_commit=?, path=? WHERE repo_id=?"
+	sqlStr := "UPDATE VirtualRepo SET base_commit=$1, path=$2 WHERE repo_id=$3"
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
 	if _, err := seafileDB.ExecContext(ctx, sqlStr, baseCommitID, newPath, repoID); err != nil {
@@ -556,7 +543,7 @@ func SetVirtualRepoBaseCommitPath(repoID, baseCommitID, newPath string) error {
 
 // GetVirtualRepoIDsByOrigin return the virtual repo ids by origin repo id.
 func GetVirtualRepoIDsByOrigin(repoID string) ([]string, error) {
-	sqlStr := "SELECT repo_id FROM VirtualRepo WHERE origin_repo=?"
+	sqlStr := "SELECT repo_id FROM VirtualRepo WHERE origin_repo=$1"
 
 	var id string
 	var ids []string
@@ -586,7 +573,7 @@ func DelVirtualRepo(repoID string, cloudMode bool) error {
 		err := fmt.Errorf("failed to remove virtual repo on disk: %v", err)
 		return err
 	}
-	sqlStr := "DELETE FROM VirtualRepo WHERE repo_id = ?"
+	sqlStr := "DELETE FROM VirtualRepo WHERE repo_id = $1"
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
 	_, err = seafileDB.ExecContext(ctx, sqlStr, repoID)
@@ -598,14 +585,14 @@ func DelVirtualRepo(repoID string, cloudMode bool) error {
 }
 
 func removeVirtualRepoOndisk(repoID string, cloudMode bool) error {
-	sqlStr := "DELETE FROM Repo WHERE repo_id = ?"
+	sqlStr := "DELETE FROM Repo WHERE repo_id = $1"
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
 	_, err := seafileDB.ExecContext(ctx, sqlStr, repoID)
 	if err != nil {
 		return err
 	}
-	sqlStr = "SELECT name, repo_id, commit_id FROM Branch WHERE repo_id=?"
+	sqlStr = "SELECT name, repo_id, commit_id FROM Branch WHERE repo_id=$1"
 	rows, err := seafileDB.QueryContext(ctx, sqlStr, repoID)
 	if err != nil {
 		return err
@@ -618,65 +605,65 @@ func removeVirtualRepoOndisk(repoID string, cloudMode bool) error {
 				return err
 			}
 		}
-		sqlStr := "DELETE FROM RepoHead WHERE branch_name = ? AND repo_id = ?"
+		sqlStr := "DELETE FROM RepoHead WHERE branch_name = $1 AND repo_id = $2"
 		_, err := seafileDB.ExecContext(ctx, sqlStr, name, id)
 		if err != nil {
 			return err
 		}
-		sqlStr = "DELETE FROM Branch WHERE name=? AND repo_id=?"
+		sqlStr = "DELETE FROM Branch WHERE name=$1 AND repo_id=$2"
 		_, err = seafileDB.ExecContext(ctx, sqlStr, name, id)
 		if err != nil {
 			return err
 		}
 	}
 
-	sqlStr = "DELETE FROM RepoOwner WHERE repo_id = ?"
+	sqlStr = "DELETE FROM RepoOwner WHERE repo_id = $1"
 	_, err = seafileDB.ExecContext(ctx, sqlStr, repoID)
 	if err != nil {
 		return err
 	}
 
-	sqlStr = "DELETE FROM SharedRepo WHERE repo_id = ?"
+	sqlStr = "DELETE FROM SharedRepo WHERE repo_id = $1"
 	_, err = seafileDB.ExecContext(ctx, sqlStr, repoID)
 	if err != nil {
 		return err
 	}
 
-	sqlStr = "DELETE FROM RepoGroup WHERE repo_id = ?"
+	sqlStr = "DELETE FROM RepoGroup WHERE repo_id = $1"
 	_, err = seafileDB.ExecContext(ctx, sqlStr, repoID)
 	if err != nil {
 		return err
 	}
 	if !cloudMode {
-		sqlStr = "DELETE FROM InnerPubRepo WHERE repo_id = ?"
+		sqlStr = "DELETE FROM InnerPubRepo WHERE repo_id = $1"
 		_, err := seafileDB.ExecContext(ctx, sqlStr, repoID)
 		if err != nil {
 			return err
 		}
 	}
 
-	sqlStr = "DELETE FROM RepoUserToken WHERE repo_id = ?"
+	sqlStr = "DELETE FROM RepoUserToken WHERE repo_id = $1"
 	_, err = seafileDB.ExecContext(ctx, sqlStr, repoID)
 	if err != nil {
 		return err
 	}
 
-	sqlStr = "DELETE FROM RepoValidSince WHERE repo_id = ?"
+	sqlStr = "DELETE FROM RepoValidSince WHERE repo_id = $1"
 	_, err = seafileDB.ExecContext(ctx, sqlStr, repoID)
 	if err != nil {
 		return err
 	}
 
-	sqlStr = "DELETE FROM RepoSize WHERE repo_id = ?"
+	sqlStr = "DELETE FROM RepoSize WHERE repo_id = $1"
 	_, err = seafileDB.ExecContext(ctx, sqlStr, repoID)
 	if err != nil {
 		return err
 	}
 
 	if option.DBType == "pgsql" {
-		sqlStr = "INSERT INTO GarbageRepos (repo_id) VALUES (?) ON CONFLICT (repo_id) DO NOTHING"
+		sqlStr = "INSERT INTO GarbageRepos (repo_id) VALUES ($1) ON CONFLICT (repo_id) DO NOTHING"
 	} else {
-		sqlStr = "INSERT IGNORE INTO GarbageRepos (repo_id) VALUES (?)"
+		sqlStr = "INSERT IGNORE INTO GarbageRepos (repo_id) VALUES ($1)"
 	}
 	_, err = seafileDB.ExecContext(ctx, sqlStr, repoID)
 	if err != nil {
@@ -689,7 +676,7 @@ func removeVirtualRepoOndisk(repoID string, cloudMode bool) error {
 // IsVirtualRepo check if the repo is a virtual reop.
 func IsVirtualRepo(repoID string) (bool, error) {
 	var exists int
-	sqlStr := "SELECT 1 FROM VirtualRepo WHERE repo_id = ?"
+	sqlStr := "SELECT 1 FROM VirtualRepo WHERE repo_id = $1"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -707,7 +694,7 @@ func IsVirtualRepo(repoID string) (bool, error) {
 // GetRepoOwner get the owner of repo.
 func GetRepoOwner(repoID string) (string, error) {
 	var owner string
-	sqlStr := "SELECT owner_id FROM RepoOwner WHERE repo_id=?"
+	sqlStr := "SELECT owner_id FROM RepoOwner WHERE repo_id=$1"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -734,7 +721,7 @@ func UpdateRepoInfo(repoID, commitID string) error {
 }
 
 func HasLastGCID(repoID, clientID string) (bool, error) {
-	sqlStr := "SELECT 1 FROM LastGCID WHERE repo_id = ? AND client_id = ?"
+	sqlStr := "SELECT 1 FROM LastGCID WHERE repo_id = $1 AND client_id = $2"
 
 	var exist int
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
@@ -752,7 +739,7 @@ func HasLastGCID(repoID, clientID string) (bool, error) {
 }
 
 func GetLastGCID(repoID, clientID string) (string, error) {
-	sqlStr := "SELECT gc_id FROM LastGCID WHERE repo_id = ? AND client_id = ?"
+	sqlStr := "SELECT gc_id FROM LastGCID WHERE repo_id = $1 AND client_id = $2"
 
 	var gcID sql.NullString
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
@@ -768,7 +755,7 @@ func GetLastGCID(repoID, clientID string) (string, error) {
 }
 
 func GetCurrentGCID(repoID string) (string, error) {
-	sqlStr := "SELECT gc_id FROM GCID WHERE repo_id = ?"
+	sqlStr := "SELECT gc_id FROM GCID WHERE repo_id = $1"
 
 	var gcID sql.NullString
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
@@ -784,7 +771,7 @@ func GetCurrentGCID(repoID string) (string, error) {
 }
 
 func RemoveLastGCID(repoID, clientID string) error {
-	sqlStr := "DELETE FROM LastGCID WHERE repo_id = ? AND client_id = ?"
+	sqlStr := "DELETE FROM LastGCID WHERE repo_id = $1 AND client_id = $2"
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
 	if _, err := seafileDB.ExecContext(ctx, sqlStr, repoID, clientID); err != nil {
@@ -801,12 +788,12 @@ func SetLastGCID(repoID, clientID, gcID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
 	if exist {
-		sqlStr := "UPDATE LastGCID SET gc_id = ? WHERE repo_id = ? AND client_id = ?"
+		sqlStr := "UPDATE LastGCID SET gc_id = $1 WHERE repo_id = $2 AND client_id = $3"
 		if _, err = seafileDB.ExecContext(ctx, sqlStr, gcID, repoID, clientID); err != nil {
 			return err
 		}
 	} else {
-		sqlStr := "INSERT INTO LastGCID (repo_id, client_id, gc_id) VALUES (?, ?, ?)"
+		sqlStr := "INSERT INTO LastGCID (repo_id, client_id, gc_id) VALUES ($1, $2, $3)"
 		if _, err = seafileDB.ExecContext(ctx, sqlStr, repoID, clientID, gcID); err != nil {
 			return err
 		}

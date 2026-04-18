@@ -64,7 +64,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fmt.Printf("Failed to open database: %v", err)
 	}
-	Init(seafDB)
+	Init(nil, seafDB)
 	commitmgr.Init(seafileConfPath, seafileDataDir)
 	code := m.Run()
 	delRepo()

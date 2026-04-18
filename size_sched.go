@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"gopkg.in/ini.v1"
+	ini "gopkg.in/ini.v1"
 
 	"database/sql"
 
-	"github.com/go-redis/redis/v8"
+	redis "github.com/go-redis/redis/v8"
 	"github.com/justjanne/seafile-fileserver/commitmgr"
 	"github.com/justjanne/seafile-fileserver/diff"
 	"github.com/justjanne/seafile-fileserver/fsmgr"
@@ -156,7 +156,7 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	var headID string
-	sqlStr := "SELECT head_id FROM RepoSize WHERE repo_id=?"
+	sqlStr := "SELECT head_id FROM RepoSize WHERE repo_id=$1"
 
 	row := trans.QueryRowContext(ctx, sqlStr, repoID)
 	if err := row.Scan(&headID); err != nil {
@@ -167,14 +167,14 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	if headID == "" {
-		sqlStr := "INSERT INTO RepoSize (repo_id, size, head_id) VALUES (?, ?, ?)"
+		sqlStr := "INSERT INTO RepoSize (repo_id, size, head_id) VALUES ($1, $2, $3)"
 		_, err = trans.ExecContext(ctx, sqlStr, repoID, size, newHeadID)
 		if err != nil {
 			trans.Rollback()
 			return err
 		}
 	} else {
-		sqlStr = "UPDATE RepoSize SET size = ?, head_id = ? WHERE repo_id = ?"
+		sqlStr = "UPDATE RepoSize SET size = $1, head_id = $2 WHERE repo_id = $3"
 		_, err = trans.ExecContext(ctx, sqlStr, size, newHeadID, repoID)
 		if err != nil {
 			trans.Rollback()
@@ -183,7 +183,7 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	var exist int
-	sqlStr = "SELECT 1 FROM RepoFileCount WHERE repo_id=?"
+	sqlStr = "SELECT 1 FROM RepoFileCount WHERE repo_id=$1"
 	row = trans.QueryRowContext(ctx, sqlStr, repoID)
 	if err := row.Scan(&exist); err != nil {
 		if err != sql.ErrNoRows {
@@ -193,14 +193,14 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	if exist != 0 {
-		sqlStr := "UPDATE RepoFileCount SET file_count=? WHERE repo_id=?"
+		sqlStr := "UPDATE RepoFileCount SET file_count=$1 WHERE repo_id=$2"
 		_, err = trans.ExecContext(ctx, sqlStr, fileCount, repoID)
 		if err != nil {
 			trans.Rollback()
 			return err
 		}
 	} else {
-		sqlStr := "INSERT INTO RepoFileCount (repo_id,file_count) VALUES (?,?)"
+		sqlStr := "INSERT INTO RepoFileCount (repo_id,file_count) VALUES ($1,$2)"
 		_, err = trans.ExecContext(ctx, sqlStr, repoID, fileCount)
 		if err != nil {
 			trans.Rollback()
@@ -248,8 +248,7 @@ type RepoInfo struct {
 }
 
 func getOldRepoInfo(repoID string) (*RepoInfo, error) {
-	sqlStr := "select s.head_id,s.size,f.file_count FROM RepoSize s LEFT JOIN RepoFileCount f ON " +
-		"s.repo_id=f.repo_id WHERE s.repo_id=?"
+	sqlStr := "select s.head_id,s.size,f.file_count FROM RepoSize s LEFT JOIN RepoFileCount f ON s.repo_id=f.repo_id WHERE s.repo_id=$1"
 
 	repoInfo := new(RepoInfo)
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)

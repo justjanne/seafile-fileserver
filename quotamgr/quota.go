@@ -1,10 +1,11 @@
-package main
+package quotamgr
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
 
+	"github.com/justjanne/seafile-fileserver/db"
 	"github.com/justjanne/seafile-fileserver/option"
 	"github.com/justjanne/seafile-fileserver/repomgr"
 )
@@ -14,7 +15,14 @@ const (
 	InfiniteQuota = -2
 )
 
-func checkQuota(repoID string, delta int64) (int, error) {
+var seafileDB *sql.DB
+
+// Init initialize status of repomgr package
+func Init(ccnet db.Database, seafile db.Database) {
+	seafileDB = seafile.Connection()
+}
+
+func CheckQuota(repoID string, delta int64) (int, error) {
 	if repoID == "" {
 		err := fmt.Errorf("bad argumets")
 		return -1, err
@@ -39,7 +47,7 @@ func checkQuota(repoID string, delta int64) (int, error) {
 		err := fmt.Errorf("repo %s has no owner", repoID)
 		return -1, err
 	}
-	quota, err := getUserQuota(user)
+	quota, err := GetUserQuota(user)
 	if err != nil {
 		err := fmt.Errorf("failed to get user quota: %v", err)
 		return -1, err
@@ -48,7 +56,7 @@ func checkQuota(repoID string, delta int64) (int, error) {
 	if quota == InfiniteQuota {
 		return 0, nil
 	}
-	usage, err := getUserUsage(user)
+	usage, err := GetUserUsage(user)
 	if err != nil || usage < 0 {
 		err := fmt.Errorf("failed to get user usage: %v", err)
 		return -1, err
@@ -61,9 +69,9 @@ func checkQuota(repoID string, delta int64) (int, error) {
 	return 0, nil
 }
 
-func getUserQuota(user string) (int64, error) {
+func GetUserQuota(user string) (int64, error) {
 	var quota int64
-	sqlStr := "SELECT quota FROM UserQuota WHERE user=?"
+	sqlStr := "SELECT quota FROM UserQuota WHERE \"user\"=$1"
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
 	row := seafileDB.QueryRowContext(ctx, sqlStr, user)
@@ -80,13 +88,9 @@ func getUserQuota(user string) (int64, error) {
 	return quota, nil
 }
 
-func getUserUsage(user string) (int64, error) {
+func GetUserUsage(user string) (int64, error) {
 	var usage sql.NullInt64
-	sqlStr := "SELECT SUM(size) FROM " +
-		"RepoOwner o LEFT JOIN VirtualRepo v ON o.repo_id=v.repo_id, " +
-		"RepoSize WHERE " +
-		"owner_id=? AND o.repo_id=RepoSize.repo_id " +
-		"AND v.repo_id IS NULL"
+	sqlStr := "SELECT SUM(size) FROM RepoOwner o LEFT JOIN VirtualRepo v ON o.repo_id=v.repo_id, RepoSize WHERE owner_id=$1 AND o.repo_id=RepoSize.repo_id AND v.repo_id IS NULL"
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()

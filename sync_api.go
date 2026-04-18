@@ -23,6 +23,7 @@ import (
 	"github.com/justjanne/seafile-fileserver/diff"
 	"github.com/justjanne/seafile-fileserver/fsmgr"
 	"github.com/justjanne/seafile-fileserver/option"
+	"github.com/justjanne/seafile-fileserver/quotamgr"
 	"github.com/justjanne/seafile-fileserver/repomgr"
 	"github.com/justjanne/seafile-fileserver/share"
 	"github.com/justjanne/seafile-fileserver/utils"
@@ -711,7 +712,7 @@ func getCheckQuotaCB(rsp http.ResponseWriter, r *http.Request) *appError {
 		return &appError{nil, msg, http.StatusBadRequest}
 	}
 
-	ret, err := checkQuota(repoID, deltaNum)
+	ret, err := quotamgr.CheckQuota(repoID, deltaNum)
 	if err != nil {
 		msg := "Internal error.\n"
 		err := fmt.Errorf("failed to check quota: %v", err)
@@ -879,7 +880,7 @@ func getRepoStoreID(repoID string) (string, error) {
 
 	var vInfo virtualRepoInfo
 	var rID, originRepoID sql.NullString
-	sqlStr := "SELECT repo_id, origin_repo FROM VirtualRepo where repo_id = ?"
+	sqlStr := "SELECT repo_id, origin_repo FROM VirtualRepo where repo_id = $1"
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
 	row := seafileDB.QueryRowContext(ctx, sqlStr, repoID)
@@ -1056,7 +1057,7 @@ func putUpdateBranchCB(rsp http.ResponseWriter, r *http.Request) *appError {
 		return &appError{nil, msg, http.StatusBadRequest}
 	}
 
-	ret, err := checkQuota(repoID, 0)
+	ret, err := quotamgr.CheckQuota(repoID, 0)
 	if err != nil {
 		err := fmt.Errorf("Failed to check quota: %v", err)
 		return &appError{err, "", http.StatusInternalServerError}
@@ -1218,7 +1219,7 @@ func includeInvalidPath(baseCommit, newCommit *commitmgr.Commit) bool {
 func getHeadCommit(rsp http.ResponseWriter, r *http.Request) *appError {
 	vars := mux.Vars(r)
 	repoID := vars["repoid"]
-	sqlStr := "SELECT EXISTS(SELECT 1 FROM Repo WHERE repo_id=?)"
+	sqlStr := "SELECT EXISTS(SELECT 1 FROM Repo WHERE repo_id=$1)"
 	var exists bool
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
@@ -1241,7 +1242,7 @@ func getHeadCommit(rsp http.ResponseWriter, r *http.Request) *appError {
 	}
 
 	var commitID string
-	sqlStr = "SELECT commit_id FROM Branch WHERE name='master' AND repo_id=?"
+	sqlStr = "SELECT commit_id FROM Branch WHERE name='master' AND repo_id=$1"
 	row = seafileDB.QueryRowContext(ctx, sqlStr, repoID)
 
 	if err := row.Scan(&commitID); err != nil {

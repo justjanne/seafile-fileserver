@@ -10,8 +10,10 @@ RUN go build -o seafile-fileserver .
 FROM alpine
 COPY --from=go_builder /repo/seafile-fileserver /
 
-RUN mkdir -p /config /data /tmp /run/seafile
-RUN chown 1000:1000 /config /data /tmp /run/seafile
+RUN mkdir -p /run/seafile
+RUN chown -R 1000:1000 /run/seafile
+RUN mkdir /config && chown 1000:1000 /config
+RUN mkdir /data && chown 1000:1000 /data
 
 USER 1000:1000
 

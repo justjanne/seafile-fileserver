@@ -35,6 +35,7 @@ import (
 	"github.com/justjanne/seafile-fileserver/diff"
 	"github.com/justjanne/seafile-fileserver/fsmgr"
 	"github.com/justjanne/seafile-fileserver/option"
+	"github.com/justjanne/seafile-fileserver/quotamgr"
 	"github.com/justjanne/seafile-fileserver/repomgr"
 	"github.com/justjanne/seafile-fileserver/utils"
 	"github.com/justjanne/seafile-fileserver/workerpool"
@@ -1328,7 +1329,7 @@ func doUpload(rsp http.ResponseWriter, r *http.Request, fsm *recvData, isAjax bo
 		}
 	}
 
-	ret, err := checkQuota(repoID, contentLen)
+	ret, err := quotamgr.CheckQuota(repoID, contentLen)
 	if err != nil {
 		msg := "Internal error.\n"
 		err := fmt.Errorf("failed to check quota: %v", err)
@@ -1720,7 +1721,7 @@ func checkQuotaByContentLength(r *http.Request, repoID string, contentLen int64)
 		return nil
 	}
 
-	ret, err := checkQuota(repoID, contentLen)
+	ret, err := quotamgr.CheckQuota(repoID, contentLen)
 	if err != nil {
 		msg := "Internal error.\n"
 		err := fmt.Errorf("failed to check quota: %v", err)
@@ -2162,7 +2163,7 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 	var row *sql.Row
 	var sqlStr string
 	if checkGC {
-		sqlStr = "SELECT gc_id FROM GCID WHERE repo_id = ? FOR UPDATE"
+		sqlStr = "SELECT gc_id FROM GCID WHERE repo_id = $1 FOR UPDATE"
 		if originRepoID == "" {
 			row = trans.QueryRowContext(ctx, sqlStr, repoID)
 		} else {
@@ -2185,7 +2186,7 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 
 	var commitID string
 	name := "master"
-	sqlStr = "SELECT commit_id FROM Branch WHERE name = ? AND repo_id = ? FOR UPDATE"
+	sqlStr = "SELECT commit_id FROM Branch WHERE name = $1 AND repo_id = $2 FOR UPDATE"
 
 	row = trans.QueryRowContext(ctx, sqlStr, name, repoID)
 	if err := row.Scan(&commitID); err != nil {
@@ -2200,7 +2201,7 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 		return false, err
 	}
 
-	sqlStr = "UPDATE Branch SET commit_id = ? WHERE name = ? AND repo_id = ?"
+	sqlStr = "UPDATE Branch SET commit_id = $1 WHERE name = $2 AND repo_id = $3"
 	_, err = trans.ExecContext(ctx, sqlStr, newCommitID, name, repoID)
 	if err != nil {
 		trans.Rollback()
@@ -3239,7 +3240,7 @@ func doUpdate(rsp http.ResponseWriter, r *http.Request, fsm *recvData, isAjax bo
 		}
 	}
 
-	ret, err := checkQuota(repoID, contentLen)
+	ret, err := quotamgr.CheckQuota(repoID, contentLen)
 	if err != nil {
 		msg := "Internal error.\n"
 		err := fmt.Errorf("failed to check quota: %v", err)
@@ -3647,7 +3648,7 @@ func checkQuotaBeforeCommitBlocks(storeID string, blockIDs []string) *appError {
 		}
 		totalSize += size
 	}
-	ret, err := checkQuota(storeID, totalSize)
+	ret, err := quotamgr.CheckQuota(storeID, totalSize)
 	if err != nil {
 		msg := "Internal error.\n"
 		err := fmt.Errorf("failed to check quota: %v", err)

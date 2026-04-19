@@ -32,7 +32,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/justjanne/seafile-fileserver/blockmgr"
 	"github.com/justjanne/seafile-fileserver/commitmgr"
-	"github.com/justjanne/seafile-fileserver/db"
 	"github.com/justjanne/seafile-fileserver/diff"
 	"github.com/justjanne/seafile-fileserver/fsmgr"
 	"github.com/justjanne/seafile-fileserver/option"
@@ -2155,7 +2154,7 @@ func genMergeDesc(repo *repomgr.Repo, mergedRoot, p1Root, p2Root string) string 
 func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID string, checkGC bool, lastGCID string) (gcConflict bool, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	trans, err := seafileDB.BeginTx(ctx, nil)
+	trans, err := seafileDB.Connection().BeginTx(ctx, nil)
 	if err != nil {
 		err := fmt.Errorf("failed to start transaction: %v", err)
 		return false, err
@@ -2164,7 +2163,7 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 	var row *sql.Row
 	var sqlStr string
 	if checkGC {
-		sqlStr = db.GCIDFindGCIDByRepoIDForUpdate
+		sqlStr = seafileDB.Queries().GCIDFindGCIDByRepoIDForUpdate
 		if originRepoID == "" {
 			row = trans.QueryRowContext(ctx, sqlStr, repoID)
 		} else {
@@ -2187,7 +2186,7 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 
 	var commitID string
 
-	row = trans.QueryRowContext(ctx, db.BranchFindCommitIDByNameAndRepoIDForUpdate, "master", repoID)
+	row = trans.QueryRowContext(ctx, seafileDB.Queries().BranchFindCommitIDByNameAndRepoIDForUpdate, "master", repoID)
 	if err := row.Scan(&commitID); err != nil {
 		if err != sql.ErrNoRows {
 			trans.Rollback()
@@ -2200,7 +2199,7 @@ func updateBranch(repoID, originRepoID, newCommitID, oldCommitID, secondParentID
 		return false, err
 	}
 
-	sqlStr = db.BranchUpdateCommitIDByNameAndRepoID
+	sqlStr = seafileDB.Queries().BranchUpdateCommitIDByNameAndRepoID
 	_, err = trans.ExecContext(ctx, sqlStr, newCommitID, "master", repoID)
 	if err != nil {
 		trans.Rollback()

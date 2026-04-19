@@ -15,11 +15,11 @@ const (
 	InfiniteQuota = -2
 )
 
-var seafileDB *sql.DB
+var seafileDB db.Database
 
 // Init initialize status of repomgr package
 func Init(ccnet db.Database, seafile db.Database) {
-	seafileDB = seafile.Connection()
+	seafileDB = seafile
 }
 
 func CheckQuota(repoID string, delta int64) (int, error) {
@@ -71,10 +71,10 @@ func CheckQuota(repoID string, delta int64) (int, error) {
 
 func GetUserQuota(user string) (int64, error) {
 	var quota int64
-	sqlStr := db.UserQuotaFindQuotaByUser
+	sqlStr := seafileDB.Queries().UserQuotaFindQuotaByUser
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, sqlStr, user)
+	row := seafileDB.Connection().QueryRowContext(ctx, sqlStr, user)
 	if err := row.Scan(&quota); err != nil {
 		if err != sql.ErrNoRows {
 			return -1, err
@@ -90,11 +90,11 @@ func GetUserQuota(user string) (int64, error) {
 
 func GetUserUsage(user string) (int64, error) {
 	var usage sql.NullInt64
-	sqlStr := db.RepoOwnerFindTotalUsageByOwnerID
+	sqlStr := seafileDB.Queries().RepoOwnerFindTotalUsageByOwnerID
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, sqlStr, user)
+	row := seafileDB.Connection().QueryRowContext(ctx, sqlStr, user)
 	if err := row.Scan(&usage); err != nil {
 		if err != sql.ErrNoRows {
 			return -1, err

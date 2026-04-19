@@ -24,15 +24,15 @@ type group struct {
 	parentGroupID int
 }
 
-var ccnetDB *sql.DB
-var seafileDB *sql.DB
+var ccnetDB db.Database
+var seafileDB db.Database
 var groupTableName string
 var cloudMode bool
 
 // Init ccnetDB, seafileDB, groupTableName, cloudMode
 func Init(ccnet db.Database, seafile db.Database, clMode bool) {
-	ccnetDB = ccnet.Connection()
-	seafileDB = seafile.Connection()
+	ccnetDB = ccnet
+	seafileDB = seafile
 	cloudMode = clMode
 }
 
@@ -74,7 +74,7 @@ func checkVirtualRepoPerm(repoID, originRepoID, user, vPath string) string {
 func getUserGroups(sqlStr string, args ...interface{}) ([]group, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	rows, err := ccnetDB.QueryContext(ctx, sqlStr, args...)
+	rows, err := ccnetDB.Connection().QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -99,8 +99,7 @@ func getUserGroups(sqlStr string, args ...interface{}) ([]group, error) {
 }
 
 func getGroupsByUser(userName string, returnAncestors bool) ([]group, error) {
-	sqlStr := fmt.Sprintf(db.GroupFindAllByUserNameOrderByGroupIDDesc)
-	groups, err := getUserGroups(sqlStr, userName)
+	groups, err := getUserGroups(ccnetDB.Queries().GroupFindAllByUserNameOrderByGroupIDDesc, userName)
 	if err != nil {
 		err := fmt.Errorf("Failed to get groups by user %s: %v", userName, err)
 		return nil, err
@@ -121,7 +120,7 @@ func getGroupsByUser(userName string, returnAncestors bool) ([]group, error) {
 		}
 	}
 	if len(paths) > 0 {
-		paths, err := getGroupPaths(fmt.Sprintf(db.GroupStructureFindAllPathsByGroupIDIn, strings.Join(paths, ", ")))
+		paths, err := getGroupPaths(fmt.Sprintf(ccnetDB.Queries().GroupStructureFindAllPathsByGroupIDIn, strings.Join(paths, ", ")))
 		if err != nil {
 			log.Errorf("Failed to get group paths: %v", err)
 		}
@@ -130,8 +129,7 @@ func getGroupsByUser(userName string, returnAncestors bool) ([]group, error) {
 			return nil, err
 		}
 
-		sqlStr = fmt.Sprintf(db.GroupFindAllByGroupIDInOrderByGroupIDDesc, paths)
-		groups, err := getUserGroups(sqlStr)
+		groups, err := getUserGroups(fmt.Sprintf(ccnetDB.Queries().GroupFindAllByGroupIDInOrderByGroupIDDesc, paths))
 		if err != nil {
 			return nil, err
 		}
@@ -144,7 +142,7 @@ func getGroupPaths(sqlStr string) (string, error) {
 	var paths string
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	rows, err := ccnetDB.QueryContext(ctx, sqlStr)
+	rows, err := ccnetDB.Connection().QueryContext(ctx, sqlStr)
 	if err != nil {
 		return paths, err
 	}
@@ -181,11 +179,11 @@ func checkGroupPermByUser(repoID string, userName string) (string, error) {
 		groupIds = append(groupIds, strconv.Itoa(group.id))
 	}
 
-	sqlStr := fmt.Sprintf(db.RepoGroupFindPermissionByRepoIDAndGroupIDIn, strings.Join(groupIds, ", "))
+	sqlStr := fmt.Sprintf(seafileDB.Queries().RepoGroupFindPermissionByRepoIDAndGroupIDIn, strings.Join(groupIds, ", "))
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	rows, err := seafileDB.QueryContext(ctx, sqlStr, repoID)
+	rows, err := seafileDB.Connection().QueryContext(ctx, sqlStr, repoID)
 	if err != nil {
 		err := fmt.Errorf("Failed to get group permission by user %s: %v", userName, err)
 		return "", err
@@ -216,7 +214,7 @@ func checkGroupPermByUser(repoID string, userName string) (string, error) {
 func checkSharedRepoPerm(repoID string, email string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, db.SharedRepoFindPermissionByRepoIDAndToEmail, repoID, email)
+	row := seafileDB.Connection().QueryRowContext(ctx, seafileDB.Queries().SharedRepoFindPermissionByRepoIDAndToEmail, repoID, email)
 
 	var perm string
 	if err := row.Scan(&perm); err != nil {
@@ -231,7 +229,7 @@ func checkSharedRepoPerm(repoID string, email string) (string, error) {
 func checkInnerPubRepoPerm(repoID string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, db.InnerPubRepoFindPermissionByRepoID, repoID)
+	row := seafileDB.Connection().QueryRowContext(ctx, seafileDB.Queries().InnerPubRepoFindPermissionByRepoID, repoID)
 
 	var perm string
 	if err := row.Scan(&perm); err != nil {
@@ -283,7 +281,7 @@ func getSharedDirsToUser(originRepoID string, toEmail string) (map[string]string
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	rows, err := seafileDB.QueryContext(ctx, db.SharedRepoFindPathAndPermissionByToEmailAndOriginRepo, toEmail, originRepoID)
+	rows, err := seafileDB.Connection().QueryContext(ctx, seafileDB.Queries().SharedRepoFindPathAndPermissionByToEmailAndOriginRepo, toEmail, originRepoID)
 	if err != nil {
 		err := fmt.Errorf("Failed to get shared directories by user %s: %v", toEmail, err)
 		return nil, err
@@ -336,11 +334,11 @@ func getSharedDirsToGroup(originRepoID string, groups []group) (map[string]strin
 	dirs := make(map[string]string)
 	groupIDs := convertGroupListToStr(groups)
 
-	sqlStr := fmt.Sprintf(db.RepoGroupFindPathAndPermissionByOriginRepoAndGroupIDIn, groupIDs)
+	sqlStr := fmt.Sprintf(seafileDB.Queries().RepoGroupFindPathAndPermissionByOriginRepoAndGroupIDIn, groupIDs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	rows, err := seafileDB.QueryContext(ctx, sqlStr, originRepoID)
+	rows, err := seafileDB.Connection().QueryContext(ctx, sqlStr, originRepoID)
 	if err != nil {
 		err := fmt.Errorf("Failed to get shared directories: %v", err)
 		return nil, err
@@ -419,7 +417,7 @@ func GetReposByOwner(email string) ([]*SharedRepo, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	stmt, err := seafileDB.PrepareContext(ctx, db.RepoOwnerFindAllByOwnerIDOrderByUpdateTimeDescRepoID)
+	stmt, err := seafileDB.Connection().PrepareContext(ctx, seafileDB.Queries().RepoOwnerFindAllByOwnerIDOrderByUpdateTimeDescRepoID)
 	if err != nil {
 		return nil, err
 	}
@@ -468,7 +466,7 @@ func GetReposByOwner(email string) ([]*SharedRepo, error) {
 func ListInnerPubRepos() ([]*SharedRepo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	stmt, err := seafileDB.PrepareContext(ctx, db.InnerPubRepoFindAll)
+	stmt, err := seafileDB.Connection().PrepareContext(ctx, seafileDB.Queries().InnerPubRepoFindAll)
 	if err != nil {
 		return nil, err
 	}
@@ -515,9 +513,9 @@ func ListShareRepos(email, columnType string) ([]*SharedRepo, error) {
 	var repos []*SharedRepo
 	var query string
 	if columnType == "from_email" {
-		query = db.SharedRepoFindAllByFromEmailOrderByUpdateTimeDescRepoID
+		query = seafileDB.Queries().SharedRepoFindAllByFromEmailOrderByUpdateTimeDescRepoID
 	} else if columnType == "to_email" {
-		query = db.SharedRepoFindAllByToEmailOrderByUpdateTimeDescRepoID
+		query = seafileDB.Queries().SharedRepoFindAllByToEmailOrderByUpdateTimeDescRepoID
 	} else {
 		err := fmt.Errorf("Wrong column type: %s", columnType)
 		return nil, err
@@ -525,7 +523,7 @@ func ListShareRepos(email, columnType string) ([]*SharedRepo, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	stmt, err := seafileDB.PrepareContext(ctx, query)
+	stmt, err := seafileDB.Connection().PrepareContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -580,9 +578,9 @@ func GetGroupReposByUser(user string, orgID int) ([]*SharedRepo, error) {
 
 	var query string
 	if orgID < 0 {
-		query = db.RepoGroupFindAllByGroupIDInOrderByGroupIDDesc
+		query = seafileDB.Queries().RepoGroupFindAllByGroupIDInOrderByGroupIDDesc
 	} else {
-		query = db.OrgRepoGroupFindAllByGroupIDInOrderByGroupIDDesc
+		query = seafileDB.Queries().OrgRepoGroupFindAllByGroupIDInOrderByGroupIDDesc
 	}
 
 	var paths []string
@@ -594,7 +592,7 @@ func GetGroupReposByUser(user string, orgID int) ([]*SharedRepo, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	rows, err := seafileDB.QueryContext(ctx, sqlStr)
+	rows, err := seafileDB.Connection().QueryContext(ctx, sqlStr)
 	if err != nil {
 		return nil, err
 	}

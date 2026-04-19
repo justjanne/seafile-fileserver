@@ -2,7 +2,6 @@
 package main
 
 import (
-	"database/sql"
 	"flag"
 	"fmt"
 	"io"
@@ -109,8 +108,8 @@ func removePidfile(pid_file_path string) error {
 	return nil
 }
 
-var seafileDB *sql.DB
-var ccnetDB *sql.DB
+var seafileDB db.Database
+var ccnetDB db.Database
 
 func main() {
 	flag.Parse()
@@ -179,11 +178,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("error loading database: %v\n", err)
 	}
-	dbCcnet, err := db.InitDatabase(dbConf, dbConf.CcnetDbName)
+	ccnetDB, err = db.InitDatabase(dbConf, dbConf.CcnetDbName)
 	if err != nil {
 		log.Fatalf("error loading database: %v\n", err)
 	}
-	dbSeafile, err := db.InitDatabase(dbConf, dbConf.SeafileDbName)
+	seafileDB, err = db.InitDatabase(dbConf, dbConf.SeafileDbName)
 	if err != nil {
 		log.Fatalf("error loading database: %v\n", err)
 	}
@@ -196,10 +195,7 @@ func main() {
 		log.SetLevel(level)
 	}
 
-	ccnetDB = dbCcnet.Connection()
-	seafileDB = dbSeafile.Connection()
-
-	repomgr.Init(dbCcnet, dbSeafile)
+	repomgr.Init(ccnetDB, seafileDB)
 
 	fsmgr.Init(centralDir, dataDir, option.FsCacheLimit)
 
@@ -207,9 +203,9 @@ func main() {
 
 	commitmgr.Init(centralDir, dataDir)
 
-	share.Init(dbCcnet, dbSeafile, option.CloudMode)
+	share.Init(ccnetDB, seafileDB, option.CloudMode)
 
-	quotamgr.Init(dbCcnet, dbSeafile)
+	quotamgr.Init(ccnetDB, seafileDB)
 
 	rpcClientInit()
 

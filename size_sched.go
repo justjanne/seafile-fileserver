@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/justjanne/seafile-fileserver/db"
 	ini "gopkg.in/ini.v1"
 
 	"database/sql"
@@ -150,14 +149,14 @@ func computeRepoSize(args ...interface{}) error {
 func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	trans, err := seafileDB.BeginTx(ctx, nil)
+	trans, err := seafileDB.Connection().BeginTx(ctx, nil)
 	if err != nil {
 		err := fmt.Errorf("failed to start transaction: %v", err)
 		return err
 	}
 
 	var headID string
-	sqlStr := db.RepoSizeFindHeadIDByRepoID
+	sqlStr := seafileDB.Queries().RepoSizeFindHeadIDByRepoID
 
 	row := trans.QueryRowContext(ctx, sqlStr, repoID)
 	if err := row.Scan(&headID); err != nil {
@@ -168,13 +167,13 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	if headID == "" {
-		_, err = trans.ExecContext(ctx, db.RepoSizeSave, repoID, size, newHeadID)
+		_, err = trans.ExecContext(ctx, seafileDB.Queries().RepoSizeSave, repoID, size, newHeadID)
 		if err != nil {
 			trans.Rollback()
 			return err
 		}
 	} else {
-		_, err = trans.ExecContext(ctx, db.RepoSizeUpdateSizeAndHeadIDByRepoID, size, newHeadID, repoID)
+		_, err = trans.ExecContext(ctx, seafileDB.Queries().RepoSizeUpdateSizeAndHeadIDByRepoID, size, newHeadID, repoID)
 		if err != nil {
 			trans.Rollback()
 			return err
@@ -182,7 +181,7 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	var exist int
-	sqlStr = db.RepoFileCountExistsByRepoID
+	sqlStr = seafileDB.Queries().RepoFileCountExistsByRepoID
 	row = trans.QueryRowContext(ctx, sqlStr, repoID)
 	if err := row.Scan(&exist); err != nil {
 		if err != sql.ErrNoRows {
@@ -192,13 +191,13 @@ func setRepoSizeAndFileCount(repoID, newHeadID string, size, fileCount int64) er
 	}
 
 	if exist != 0 {
-		_, err = trans.ExecContext(ctx, db.RepoFileCountUpdateFileCountByRepoID, fileCount, repoID)
+		_, err = trans.ExecContext(ctx, seafileDB.Queries().RepoFileCountUpdateFileCountByRepoID, fileCount, repoID)
 		if err != nil {
 			trans.Rollback()
 			return err
 		}
 	} else {
-		_, err = trans.ExecContext(ctx, db.RepoFileCountSave, repoID, fileCount)
+		_, err = trans.ExecContext(ctx, seafileDB.Queries().RepoFileCountSave, repoID, fileCount)
 		if err != nil {
 			trans.Rollback()
 			return err
@@ -245,12 +244,10 @@ type RepoInfo struct {
 }
 
 func getOldRepoInfo(repoID string) (*RepoInfo, error) {
-	sqlStr := "select s.head_id,s.size,f.file_count FROM RepoSize s LEFT JOIN RepoFileCount f ON s.repo_id=f.repo_id WHERE s.repo_id=$1"
-
 	repoInfo := new(RepoInfo)
 	ctx, cancel := context.WithTimeout(context.Background(), option.DBOpTimeout)
 	defer cancel()
-	row := seafileDB.QueryRowContext(ctx, sqlStr, repoID)
+	row := seafileDB.Connection().QueryRowContext(ctx, seafileDB.Queries().SelectRepoInfoByRepoId, repoID)
 	if err := row.Scan(&repoInfo.HeadID, &repoInfo.Size, &repoInfo.FileCount); err != nil {
 		if err != sql.ErrNoRows {
 			return nil, err
